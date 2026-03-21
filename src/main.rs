@@ -47,7 +47,7 @@ async fn main() -> ashpd::Result<()> {
     let pipewire_node_id = &stream.pipe_wire_node_id();
     let stream_raw_fd = &stream_fd.as_raw_fd();
 
-    let pipewire_element = gst::ElementFactory::make("pipewiresrc")
+    let pipewire_source = gst::ElementFactory::make("pipewiresrc")
         .property("fd", stream_raw_fd)
         .property("path", pipewire_node_id.to_string())
         .build()
@@ -71,7 +71,8 @@ async fn main() -> ashpd::Result<()> {
     let pipeline = gst::Pipeline::default();
     pipeline
         .add_many([
-            &pipewire_element,
+            &pipewire_source,
+            &tee,
             &videoconvert,
             &videoconvert2,
             &x264enc,
@@ -80,12 +81,18 @@ async fn main() -> ashpd::Result<()> {
             &wayland_sink,
             &queue1,
             &queue2,
-            &tee,
         ])
         .unwrap();
-    gst::Element::link_many([&pipewire_element, &tee]).unwrap();
-    gst::Element::link_many([&tee, &queue1, &videoconvert, &x264enc, &flvmux, &filesink]).unwrap();
-    gst::Element::link_many([&tee, &queue2, &videoconvert2, &wayland_sink]).unwrap();
+    gst::Element::link_many([&pipewire_source, &tee]).unwrap();
+    gst::Element::link_many([&queue1, &videoconvert, &x264enc, &flvmux, &filesink]).unwrap();
+    gst::Element::link_many([&queue2, &videoconvert2, &wayland_sink]).unwrap();
+
+    let tee_pad_1 = tee.request_pad_simple("src_%u").unwrap();
+    let queue1_pad = queue1.static_pad("sink").unwrap();
+    let tee_pad_2 = tee.request_pad_simple("src_%u").unwrap();
+    let queue2_pad = queue2.static_pad("sink").unwrap();
+    tee_pad_1.link(&queue1_pad).unwrap();
+    tee_pad_2.link(&queue2_pad).unwrap();
     pipeline.set_state(gst::State::Playing).unwrap();
     let pipeline_2 = pipeline.clone();
     let mut signals = Signals::new([SIGINT]).unwrap();
