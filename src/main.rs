@@ -3,8 +3,8 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use ashpd::desktop::screencast::{
     CursorMode, Screencast, SelectSourcesOptions, SourceType, Stream,
 };
-use gstreamer::prelude::*;
 use gstreamer as gst;
+use gstreamer::prelude::*;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 
 async fn open_portal() -> ashpd::Result<(Stream, OwnedFd)> {
@@ -54,10 +54,18 @@ async fn main() -> ashpd::Result<()> {
         .unwrap();
 
     let videoconvert = gst::ElementFactory::make("videoconvert").build().unwrap();
+    let videoconvert2 = gst::ElementFactory::make("videoconvert").build().unwrap();
     let x264enc = gst::ElementFactory::make("x264enc").build().unwrap();
     let flvmux = gst::ElementFactory::make("flvmux").build().unwrap();
     let filesink = gst::ElementFactory::make("filesink")
         .property("location", "xyz.flv")
+        .build()
+        .unwrap();
+    let wayland_sink = gst::ElementFactory::make("waylandsink").build().unwrap();
+    let queue1 = gst::ElementFactory::make("queue").build().unwrap();
+    let queue2 = gst::ElementFactory::make("queue").build().unwrap();
+    let tee = gst::ElementFactory::make("tee")
+        .property("name", "t")
         .build()
         .unwrap();
     let pipeline = gst::Pipeline::default();
@@ -65,19 +73,19 @@ async fn main() -> ashpd::Result<()> {
         .add_many([
             &pipewire_element,
             &videoconvert,
+            &videoconvert2,
             &x264enc,
             &flvmux,
             &filesink,
+            &wayland_sink,
+            &queue1,
+            &queue2,
+            &tee,
         ])
         .unwrap();
-    gst::Element::link_many([
-        &pipewire_element,
-        &videoconvert,
-        &x264enc,
-        &flvmux,
-        &filesink,
-    ])
-    .unwrap();
+    gst::Element::link_many([&pipewire_element, &tee]).unwrap();
+    gst::Element::link_many([&tee, &queue1, &videoconvert, &x264enc, &flvmux, &filesink]).unwrap();
+    gst::Element::link_many([&tee, &queue2, &videoconvert2, &wayland_sink]).unwrap();
     pipeline.set_state(gst::State::Playing).unwrap();
     let pipeline_2 = pipeline.clone();
     let mut signals = Signals::new([SIGINT]).unwrap();
