@@ -1,0 +1,16 @@
+[package]
+name = "pw_ashpd_train"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ashpd = { version = "0.13.8", default-features = false, features = [
+	"tokio",
+	"pipewire",
+	"screencast",
+	"wayland",
+] }
+tokio = { version = "1.36", features = ["full"] }
+gstreamer = "0.22.1"
+gstreamer-app = "0.22.0"
+signal-hook = "0.4.3"
