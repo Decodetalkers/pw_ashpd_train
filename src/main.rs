@@ -123,7 +123,8 @@ async fn main() -> ashpd::Result<()> {
     let handle = std::thread::spawn(move || {
         for sig in signals.forever() {
             if sig == SIGINT {
-                pipeline_2.set_state(gst::State::Null).unwrap();
+                pipeline_2.send_event(gst::event::Eos::new());
+
                 return;
             }
         }
@@ -137,6 +138,7 @@ async fn main() -> ashpd::Result<()> {
 
         match msg.view() {
             MessageView::Eos(..) => {
+                pipeline.set_state(gst::State::Null).unwrap();
                 println!("EOS");
                 break;
             }
@@ -152,11 +154,7 @@ async fn main() -> ashpd::Result<()> {
                 );
                 break;
             }
-            MessageView::StateChanged(state) => {
-                if state.current() == gst::State::Null {
-                    break;
-                }
-            }
+
             _ => (),
         }
     }
